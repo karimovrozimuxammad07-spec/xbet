@@ -13,3 +13,5 @@ RUN npm install
 # 5. Запускаем проект
 # (замени index.js на имя твоего основного файла)
 CMD ["node", "index.js"]
+
+pip install telegraf axios dotenv
