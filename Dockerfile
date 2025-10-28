@@ -12,3 +12,5 @@ RUN pip install --no-cache-dir -r requirements.txt || true
 
 # 5. Указываем команду для запуска бота
 CMD ["python", "bot.py"]
+
+pip install aiogram
