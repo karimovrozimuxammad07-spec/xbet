@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # === 🔐 BOT TOKEN ===
 BOT_TOKEN = "8214638722:AAFJFQj716vEqqgmH98lP9XWxXrYF8MxHTk"
-ADMIN_ID = 7930223003  # <-- Проверь! Это должен быть настоящий Telegram ID админа
+ADMIN_ID = 7930223003
 ADMIN_USERNAME = "@Xop002"
 
 # === 📱 BUKMEKERLAR ===
@@ -23,7 +23,7 @@ BOOKMAKER_INFO = {
     },
     "melbet": {
         "name": "MelBet",
-        "desc": "🟧 Foydalanish oson bo‘lgan ilova. Tez to‘lovlar va yangi foydalanuvchilar uchun bonuslar mavjud.",
+        "desc": "🟧 Foydalanish oson bo'lgan ilova. Tez to'lovlar va yangi foydalanuvchilar uchun bonuslar mavjud.",
         "apk": "https://t.me/kuzbet0lma/7"
     }
 }
@@ -66,7 +66,16 @@ async def start(message: types.Message):
 async def bookmaker_choice(callback: types.CallbackQuery):
     bookmaker_key = callback.data.split("_")[1]
     info = BOOKMAKER_INFO.get(bookmaker_key)
-    user_state[callback.from_user.id] = {"bookmaker": bookmaker_key, "step": "ask_id"}
+    
+    if not info:
+        await callback.answer("❌ Bukmeker topilmadi")
+        return
+        
+    user_state[callback.from_user.id] = {
+        "bookmaker": bookmaker_key, 
+        "step": "ask_id",
+        "bookmaker_name": info['name']
+    }
 
     text_apk = (
         f"🏦 <b>{info['name']}</b>\n\n"
@@ -75,89 +84,169 @@ async def bookmaker_choice(callback: types.CallbackQuery):
     )
     await callback.message.answer(text_apk, parse_mode="HTML")
 
+    # ОБНОВЛЕННЫЙ ТЕКСТ - сразу просит ID и скриншот
     text_instr = (
-        "🤖 BOT SERVERGA ULANISHI UCHUN ID RAQAMINGIZNI YUBORING ❗✍️\n\n"
-        "Bot aniq ishlashi uchun shartlarni bajaring:👇\n"
-        "1️⃣ Telefon raqam ulangan bo‘lishi kerak.\n"
-        "2️⃣ Promokod kiritilgan bo‘lishi kerak!\n"
-        "3️⃣ Deposit minimal 10 $ dan ko‘p bo‘lishi kerak.\n"
-        "4️⃣ O‘yinlar oralig‘i 15 daqiqadan kam bo‘lmasin.\n"
-        "5️⃣ ID yuborilgandan so‘ng 1–2 soat kutib o‘yinni boshlang.\n"
-        "Bot kombinatsiyalarida faqat oxirgi sonni tanlang❗\n\n"
-        "🍎 Apple of Fortuna o‘yinini boshlash uchun ID raqamingizni shu yerga yozib ✍️ yuboring!"
+        "🤖 BOT SERVERGA ULANISHI UCHUN QUYIDAGILARNI YUBORING:\n\n"
+        "Bot to'g'ri ishlashi uchun quyidagi shartlarni bajaring 👇:\n\n"
+        "1️⃣ Akkount ochishda KUZ11 promokodi kiritilgan bo'lishi kerak\n"
+        "2️⃣ Minimal depozit 5$ – 10$ dan yuqori bo'lishi kerak\n"
+        "3️⃣ ID yuborgandan so'ng, o'yin boshlanishidan oldin 1–2 soat kuting\n\n"
+        "🍎 Apple of Fortuna o'yinini boshlash uchun:\n\n"
+        "✍️ Avvalo, ID raqamingizni yuboring:\n"
     )
     await callback.message.answer(text_instr)
     await callback.answer()
 
 # === 🆔 ID QABUL QILISH ===
-@dp.message()
-async def handle_id(message: types.Message):
+@dp.message(F.text)
+async def handle_text(message: types.Message):
+    uid = message.from_user.id
+    state = user_state.get(uid)
+    
+    # Agar promokod yuborilsa
+    if message.text.strip().upper() == "KUZBET11":
+        await promo_accept(message)
+        return
+
+    if not state:
+        await message.answer("❌ Iltimos, avval /start ni bosing va bukmekerni tanlang.")
+        return
+
+    if state.get("step") == "ask_id":
+        # ID ni saqlaymiz
+        user_state[uid]["id"] = message.text.strip()
+        user_state[uid]["step"] = "waiting_screenshot"
+        
+        # ОБНОВЛЕННЫЙ ТЕКСТ - просит скриншот с промокодом KUZ11
+        await message.answer(
+            "✅ ID qabul qilindi!\n\n"
+            "📸 Endi KUZ11 promokodini kirganligingizni tasdiqlovchi SKRINSHOTNI yuboring:\n\n"
+            "Skrinshotda KUZ11 promokodi ko'rinishi kerak!\n\n"
+            "Skrinshotni shu yerga yuboring:"
+        )
+    
+    elif state.get("step") == "waiting_screenshot":
+        await message.answer("❌ Iltimos, skrinshot yuboring, matn emas!")
+    
+    elif state.get("step") == "rejected":
+        await message.answer("❌ Sizning so'rovingiz rad etilgan. Admin bilan bog'laning.")
+    
+    else:
+        await message.answer("❌ Noma'lum xatolik. /start ni bosing.")
+
+# === 📸 SKRINSHOT QABUL QILISH ===
+@dp.message(F.photo)
+async def handle_screenshot(message: types.Message):
     uid = message.from_user.id
     state = user_state.get(uid)
 
-    if not state or state.get("step") != "ask_id":
-        await message.answer("Iltimos, avval /start ni bosing va bukmekerni tanlang.")
+    if not state or state.get("step") != "waiting_screenshot":
+        if state and state.get("step") == "ask_id":
+            await message.answer("❌ Iltimos, avval ID raqamingizni yuboring.")
+        else:
+            await message.answer("❌ Iltimos, avval /start ni bosing va bukmekerni tanlang.")
         return
 
-    user_state[uid]["id"] = message.text.strip()
+    # Skrinshotni saqlaymiz
+    user_state[uid]["screenshot"] = message.photo[-1].file_id
     user_state[uid]["step"] = "waiting_approval"
 
+    # Admin uchun matn tayyorlaymiz
     text_for_admin = (
-        f"👤 <b>Yangi foydalanuvchi ID yubordi!</b>\n\n"
-        f"🧾 ID: <code>{message.text.strip()}</code>\n"
-        f"📱 Username: @{message.from_user.username or 'yo‘q'}\n"
+        f"👤 <b>Yangi foydalanuvchi ID va skrinshot yubordi!</b>\n\n"
+        f"🧾 ID: <code>{state['id']}</code>\n"
+        f"📱 Username: @{message.from_user.username or 'yoq'}\n"
         f"🆔 Telegram ID: <code>{uid}</code>\n"
-        f"🏦 Bukmeker: {BOOKMAKER_INFO[state['bookmaker']]['name']}\n\n"
-        f"Adminga: foydalanuvchiga ruxsat berish yoki rad etish 👇"
+        f"🏦 Bukmeker: {state.get('bookmaker_name', 'Noma lum')}\n\n"
+        f"Foydalanuvchini tasdiqlaysizmi?"
     )
 
     try:
-        await bot.send_message(ADMIN_ID, text_for_admin, parse_mode="HTML", reply_markup=approve_keyboard(uid))
-        await message.answer("🕓 Sizning ID admin tekshiruvidan o‘tmoqda. Iltimos, kuting...")
-    except Exception as e:
-        print(f"❌ Admin'ga yuborilmadi: {e}")
+        # Admin'ga matn va skrinshotni yuboramiz
+        await bot.send_photo(
+            chat_id=ADMIN_ID,
+            photo=state['screenshot'],
+            caption=text_for_admin,
+            parse_mode="HTML",
+            reply_markup=approve_keyboard(uid)
+        )
         await message.answer(
-            f"⚠️ Admin bilan aloqa o‘rnatilmadi.\n"
-            f"Iltimos, admin {ADMIN_USERNAME} bilan bog‘laning."
+            "✅ Sizning ID va skrinshot admin tekshiruviga yuborildi!\n"
+            "🕓 Tasdiqlanishini kuting...\n\n"
+            "Admin sizni tez orada tasdiqlaydi."
+        )
+        
+    except Exception as e:
+        error_msg = f"❌ Admin'ga yuborishda xatolik: {type(e).__name__}: {str(e)}"
+        print(error_msg)
+        
+        await message.answer(
+            f"⚠️ Ma'lumotlaringiz adminga yuborilmadi.\n\n"
+            f"Iltimos, keyinroq qayta urinib ko'ring yoki admin {ADMIN_USERNAME} bilan bog'laning."
         )
 
 # === 👮‍♂️ ADMIN TASDIQLASH / RAD ETISH ===
 @dp.callback_query(F.data.startswith("approve_"))
 async def approve_user(callback: types.CallbackQuery):
-    user_id = int(callback.data.split("_")[1])
-    if user_id not in user_state:
-        await callback.answer("Foydalanuvchi topilmadi.", show_alert=True)
-        return
-    user_state[user_id]["step"] = "signals"
-    await bot.send_message(
-        user_id,
-        "✅ Admin tomonidan tasdiqlandi!\n\nEndi siz botdan foydalanishingiz mumkin ✅"
-    )
-    await send_random_signal(user_id)
-    await callback.message.edit_text("✅ Foydalanuvchi tasdiqlandi.")
-    await callback.answer()
+    try:
+        user_id = int(callback.data.split("_")[1])
+        
+        if user_id not in user_state:
+            await callback.answer("❌ Foydalanuvchi topilmadi.", show_alert=True)
+            return
+            
+        user_state[user_id]["step"] = "signals"
+        
+        await bot.send_message(
+            user_id,
+            "🎉 Tabriklaymiz! ✅ Admin tomonidan tasdiqlandi!\n\n"
+            "Endi siz botdan to'liq foydalanishingiz mumkin ✅\n\n"
+            "Birinchi signalni olish uchun quyidagi tugmani bosing 👇"
+        )
+        await send_random_signal(user_id)
+        
+        await callback.message.edit_text(
+            f"✅ Foydalanuvchi tasdiqlandi!\n"
+            f"User ID: {user_id}\n"
+            f"Username: @{callback.from_user.username or 'yoq'}"
+        )
+        await callback.answer("✅ Foydalanuvchi tasdiqlandi")
+        
+    except Exception as e:
+        await callback.answer(f"❌ Xatolik: {str(e)}", show_alert=True)
 
 @dp.callback_query(F.data.startswith("reject_"))
 async def reject_user(callback: types.CallbackQuery):
-    user_id = int(callback.data.split("_")[1])
-    user_state[user_id] = {"step": "rejected"}
-    await bot.send_message(
-        user_id,
-        (
-            "❌ Sizning so‘rovingiz rad etildi.\n\n"
-            "Agar sizda KUZ11 promokodi bo‘lsa, uni kiriting.\n"
-            "Promokodni yuboring (masalan: KUZ11) Admin bilan Aloqa @Xop002 "
+    try:
+        user_id = int(callback.data.split("_")[1])
+        user_state[user_id] = {"step": "rejected"}
+        
+        await bot.send_message(
+            user_id,
+            "❌ Sizning so'rovingiz rad etildi.\n\n"
+            "Agar sizda KUZ11 promokodi bo'lsa, uni kiriting:\n"
+            "Yozing: KUZBET11\n\n"
+            "Yoki admin bilan bog'laning: @Xop002"
         )
-    )
-    await callback.message.edit_text("❌ Foydalanuvchi rad etildi.")
-    await callback.answer()
+        
+        await callback.message.edit_text(
+            f"❌ Foydalanuvchi rad etildi.\n"
+            f"User ID: {user_id}\n"
+            f"Username: @{callback.from_user.username or 'yoq'}"
+        )
+        await callback.answer("❌ Foydalanuvchi rad etildi")
+        
+    except Exception as e:
+        await callback.answer(f"❌ Xatolik: {str(e)}", show_alert=True)
 
 # === ПРОМОКОД KUZBET11 ===
 @dp.message(F.text.regexp(r"(?i)^KUZBET11$"))
 async def promo_accept(message: types.Message):
     user_state[message.from_user.id] = {"step": "signals"}
     await message.answer(
-        "✅ Promokod KUZBET11 tasdiqlandi!\nEndi siz botdan foydalanishingiz mumkin ✅"
+        "✅ Promokod KUZBET11 tasdiqlandi!\n\n"
+        "🎉 Endi siz botdan to'liq foydalanishingiz mumkin ✅\n\n"
+        "Birinchi signalni olish uchun quyidagi tugmani bosing 👇"
     )
     await send_random_signal(message.from_user.id)
 
@@ -166,24 +255,38 @@ async def send_random_signal(chat_id: int):
     number = random.randint(1, 5)
     await bot.send_message(
         chat_id,
-        f"📶 Signal\n👉 {number}-chi olmani tanlang 🍎",
+        f"📶 <b>Yangi signal</b>\n\n"
+        f"👉 <b>{number}-chi</b> olmani tanlang 🍎\n\n"
+        f"Keyingi signalni olish uchun tugmani bosing 👇",
+        parse_mode="HTML",
         reply_markup=new_signal_button()
     )
 
-# === ♻️ “Yangi signal olish” ===
+# === ♻️ YANGI SIGNAL OLISH ===
 @dp.callback_query(F.data == "new_signal")
 async def next_signal(callback: types.CallbackQuery):
     uid = callback.from_user.id
-    if user_state.get(uid, {}).get("step") != "signals":
+    state = user_state.get(uid, {})
+    
+    if state.get("step") != "signals":
         await callback.answer("❌ Sizga hali ruxsat berilmagan!", show_alert=True)
         return
+        
     await send_random_signal(uid)
-    await callback.answer()
+    await callback.answer("✅ Yangi signal yuborildi!")
 
 # === ▶️ ISHGA TUSHURISH ===
 async def main():
-    print("✅ Bot ishga tushdi...")
-    await dp.start_polling(bot)
+    print("🤖 Bot ishga tushdi...")
+    print(f"🔧 Admin ID: {ADMIN_ID}")
+    print("⏳ Yangi foydalanuvchilarni kutish...")
+    
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f"❌ Bot ishga tushmadi: {e}")
+    finally:
+        await bot.session.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
