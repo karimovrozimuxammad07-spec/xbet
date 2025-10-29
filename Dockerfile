@@ -7,8 +7,8 @@ WORKDIR /app
 # 3. Копируем все файлы проекта
 COPY . .
 
-# 4. Устанавливаем зависимости (если файл есть)
-RUN pip install --no-cache-dir -r requirements.txt || true
+# 4. Устанавливаем зависимости
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 5. Запускаем бота
 CMD ["python", "bot.py"]
