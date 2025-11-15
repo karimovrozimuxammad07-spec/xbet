@@ -14,17 +14,17 @@ BOOKMAKER_INFO = {
     "1xbet": {
         "name": "1xBet",
         "desc": "📘 Mashhur bukmeker. Keng tanlovdagi sport o'yinlariga tikish imkoniyati.",
-        "apk": "https://t.me/kuzbet0lma/5"
+        "apk": "https://t.me/bonusliilova1/4"
     },
     "linnbet": {
         "name": "LinnBet",
         "desc": "🟩 Ishonchli bukmeker. Yuqori koeffitsiyentlar va qulay interfeys.",
-        "apk": "https://t.me/kuzbet0lma/6"
+        "apk": "https://t.me/bonusliilova1/2"
     },
     "melbet": {
         "name": "MelBet",
         "desc": "🟧 Foydalanish oson bo'lgan ilova. Tez to'lovlar va yangi foydalanuvchilar uchun bonuslar mavjud.",
-        "apk": "https://t.me/kuzbet0lma/7"
+        "apk": "https://t.me/bonusliilova1/3"
     }
 }
 
@@ -290,3 +290,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
